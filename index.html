@@ -1,0 +1,966 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Cadence — Post Schedule & Approvals</title>
+
+<!-- ============================================================
+     CONFIG — for permanent deployment, paste your two Supabase
+     values between the quotes below. Leave them empty to enter
+     them on the connect screen each session instead.
+     ============================================================ -->
+<script>
+  window.CADENCE_CONFIG = {
+    url:     "",   // e.g. https://abcdxyz.supabase.co
+    anonKey: ""    // the "anon public" key from Supabase → Settings → API
+  };
+</script>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+
+<style>
+:root{
+  --offwhite:#FAF6F2; --cream:#F5EDE0; --blush:#E1CBB9;
+  --burgundy:#50000B; --maroon:#5A000B; --red:#A40011;
+  --flamingo:#FF9693; --gold:#C5973B; --sage:#5E7355;
+  --ink:#1A0508; --gray:#8C7A6E;
+
+  --gold-tint:#F6ECD6; --sage-tint:#E6EDE2;
+  --red-tint:#F7DAD9; --burg-tint:#ECDDDD;
+
+  --r-card:20px; --r-input:12px; --r-badge:6px; --r-pill:999px;
+  --sh-1:0 1px 2px rgba(26,5,8,.04), 0 4px 16px rgba(26,5,8,.05);
+  --sh-2:0 8px 30px rgba(26,5,8,.12);
+  --ease:cubic-bezier(.22,.61,.36,1);
+
+  --display:"Fraunces",Georgia,"Times New Roman",serif;
+  --ui:-apple-system,BlinkMacSystemFont,"Inter","Segoe UI",Roboto,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:var(--ui);background:var(--offwhite);color:var(--ink);
+  -webkit-font-smoothing:antialiased;line-height:1.4}
+button{font-family:inherit;cursor:pointer;border:none;background:none}
+input,textarea,select{font-family:inherit}
+a{color:inherit}
+
+/* ---------- shared primitives ---------- */
+.btn{display:inline-flex;align-items:center;gap:8px;border-radius:var(--r-pill);
+  font-size:13px;font-weight:600;letter-spacing:.01em;padding:11px 20px;
+  transition:transform .2s var(--ease),box-shadow .2s var(--ease),background .2s var(--ease);
+  white-space:nowrap}
+.btn:active{transform:scale(.97)}
+.btn-primary{background:var(--red);color:#fff}
+.btn-primary:hover{box-shadow:0 6px 18px rgba(164,0,17,.32)}
+.btn-dark{background:var(--burgundy);color:#fff}
+.btn-dark:hover{box-shadow:0 6px 18px rgba(80,0,11,.3)}
+.btn-ghost{background:transparent;color:var(--maroon);border:1.5px solid rgba(90,0,11,.18)}
+.btn-ghost:hover{background:rgba(90,0,11,.05)}
+.btn-soft{background:rgba(90,0,11,.07);color:var(--maroon)}
+.btn-soft:hover{background:rgba(90,0,11,.12)}
+.btn-sage{background:var(--sage);color:#fff}
+.btn-sage:hover{box-shadow:0 6px 18px rgba(94,115,85,.35)}
+.btn:disabled{opacity:.35;cursor:not-allowed;box-shadow:none;transform:none}
+.btn-sm{padding:8px 14px;font-size:12px}
+
+.field{display:flex;flex-direction:column;gap:7px;margin-bottom:16px}
+.field label{font-size:12px;font-weight:600;color:var(--gray);
+  text-transform:uppercase;letter-spacing:.08em}
+.field input,.field textarea,.field select{
+  background:#fff;border:1.5px solid rgba(140,122,110,.25);
+  border-radius:var(--r-input);padding:12px 14px;font-size:15px;color:var(--ink);
+  transition:border-color .2s var(--ease),box-shadow .2s var(--ease)}
+.field input:focus,.field textarea:focus,.field select:focus{
+  outline:none;border-color:var(--red);box-shadow:0 0 0 4px rgba(164,0,17,.1)}
+.field textarea{resize:vertical;min-height:84px;line-height:1.5}
+
+.badge{display:inline-flex;align-items:center;gap:6px;border-radius:var(--r-badge);
+  font-size:10.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;
+  padding:5px 9px}
+.dot{width:8px;height:8px;border-radius:50%;flex:none}
+.s-pending{background:var(--gold-tint);color:#8a6516}
+.s-approved{background:var(--sage-tint);color:#3f5237}
+.s-needs_changes{background:var(--red-tint);color:#8a0010}
+.s-posted{background:var(--burg-tint);color:var(--burgundy)}
+.d-pending{background:var(--gold)} .d-approved{background:var(--sage)}
+.d-needs_changes{background:var(--red)} .d-posted{background:var(--burgundy)}
+
+.eyebrow{font-size:11px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--red)}
+
+/* ---------- centered screens (connect / auth) ---------- */
+.screen{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
+.panel{width:100%;max-width:440px;background:#fff;border-radius:var(--r-card);
+  box-shadow:var(--sh-2);padding:40px;animation:rise .5s var(--ease)}
+@keyframes rise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+.panel .wordmark{font-family:var(--display);font-size:30px;font-weight:500;
+  color:var(--burgundy);letter-spacing:-.01em;margin-bottom:4px}
+.panel .sub{color:var(--gray);font-size:14px;margin-bottom:28px;line-height:1.5}
+.tabs{display:flex;gap:4px;background:rgba(140,122,110,.12);border-radius:var(--r-pill);
+  padding:4px;margin-bottom:24px}
+.tabs button{flex:1;border-radius:var(--r-pill);padding:9px;font-size:13px;font-weight:600;
+  color:var(--gray);transition:.2s var(--ease)}
+.tabs button.on{background:#fff;color:var(--maroon);box-shadow:var(--sh-1)}
+.role-pick{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:8px}
+.role-pick button{border:1.5px solid rgba(140,122,110,.25);border-radius:var(--r-input);
+  padding:14px 12px;text-align:left;transition:.2s var(--ease)}
+.role-pick button.on{border-color:var(--red);background:rgba(164,0,17,.05)}
+.role-pick .rt{font-weight:600;font-size:14px;color:var(--ink);display:block}
+.role-pick .rd{font-size:12px;color:var(--gray);margin-top:2px;display:block}
+.err{background:var(--red-tint);color:#8a0010;font-size:13px;padding:11px 14px;
+  border-radius:var(--r-input);margin-bottom:16px;line-height:1.4}
+
+/* ---------- app shell ---------- */
+.topbar{position:sticky;top:0;z-index:40;background:rgba(80,0,11,.92);
+  backdrop-filter:saturate(160%) blur(14px);-webkit-backdrop-filter:saturate(160%) blur(14px);
+  color:#fff;display:flex;align-items:center;gap:20px;padding:0 24px;height:60px}
+.topbar .brand{font-family:var(--display);font-size:21px;font-weight:500;letter-spacing:-.01em}
+.topbar .brand b{color:var(--flamingo);font-weight:500}
+.summary{display:flex;gap:14px;margin-left:6px;flex-wrap:wrap}
+.summary .chip{display:flex;align-items:center;gap:6px;font-size:12.5px;
+  color:rgba(255,255,255,.85);font-weight:500}
+.summary .chip b{color:#fff;font-weight:700}
+.spacer{flex:1}
+.whoami{display:flex;align-items:center;gap:10px}
+.whoami .rolebadge{font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+  background:rgba(255,255,255,.15);padding:5px 10px;border-radius:var(--r-pill)}
+.whoami .email{font-size:12.5px;color:rgba(255,255,255,.8);max-width:160px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.linkbtn{font-size:12.5px;color:rgba(255,255,255,.8);font-weight:600}
+.linkbtn:hover{color:#fff}
+
+.wrap{max-width:1180px;margin:0 auto;padding:28px 24px 80px}
+
+.toolbar{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:24px}
+.toolbar h1{font-family:var(--display);font-size:30px;font-weight:500;color:var(--maroon);
+  letter-spacing:-.01em;margin-right:4px}
+.viewtoggle{display:flex;background:#fff;border-radius:var(--r-pill);padding:4px;
+  box-shadow:var(--sh-1)}
+.viewtoggle button{border-radius:var(--r-pill);padding:8px 18px;font-size:13px;font-weight:600;
+  color:var(--gray);transition:.2s var(--ease)}
+.viewtoggle button.on{background:var(--burgundy);color:#fff}
+.navdate{display:flex;align-items:center;gap:6px}
+.navdate .arrow{width:36px;height:36px;border-radius:50%;background:#fff;box-shadow:var(--sh-1);
+  display:flex;align-items:center;justify-content:center;font-size:16px;color:var(--maroon);
+  transition:.2s var(--ease)}
+.navdate .arrow:hover{background:var(--cream)}
+.navdate .label{font-size:14px;font-weight:600;color:var(--ink);min-width:150px;text-align:center}
+.filterchip{display:inline-flex;align-items:center;gap:8px;border-radius:var(--r-pill);
+  padding:9px 16px;font-size:13px;font-weight:600;background:#fff;box-shadow:var(--sh-1);
+  color:var(--maroon);transition:.2s var(--ease)}
+.filterchip.on{background:var(--gold);color:#fff}
+.filterchip .count{background:rgba(0,0,0,.12);border-radius:var(--r-pill);
+  padding:1px 7px;font-size:11px}
+.filterchip.on .count{background:rgba(255,255,255,.25)}
+
+/* ---------- week grid ---------- */
+.weekgrid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:12px}
+.daycol{background:var(--cream);border-radius:var(--r-card);padding:12px 12px 16px;min-height:160px}
+.daycol.today{outline:2px solid var(--flamingo);outline-offset:-2px}
+.dayhead{display:flex;align-items:baseline;justify-content:space-between;
+  padding:2px 4px 12px;border-bottom:1px solid rgba(140,122,110,.18);margin-bottom:12px}
+.dayhead .dow{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--gray)}
+.dayhead .num{font-family:var(--display);font-size:22px;font-weight:500;color:var(--maroon)}
+.daydots{display:flex;gap:4px;margin-top:4px}
+.empty-day{font-size:12px;color:var(--gray);text-align:center;padding:16px 4px;opacity:.7}
+
+/* ---------- day (list) view ---------- */
+.daylist{display:flex;flex-direction:column;gap:14px}
+.daylist .dlhead{font-family:var(--display);font-size:22px;color:var(--maroon);font-weight:500;
+  margin-bottom:2px}
+
+/* ---------- post card ---------- */
+.card{background:#fff;border-radius:16px;box-shadow:var(--sh-1);padding:13px;
+  cursor:pointer;transition:transform .25s var(--ease),box-shadow .25s var(--ease);
+  text-align:left;width:100%;display:block;border:1px solid rgba(140,122,110,.08)}
+.card:hover{transform:translateY(-3px);box-shadow:var(--sh-2)}
+.card .ctime{font-size:12px;font-weight:700;color:var(--maroon);letter-spacing:.02em}
+.card .ccap{font-size:13.5px;color:var(--ink);line-height:1.45;margin:7px 0 10px;
+  display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.card .clink{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;color:var(--gray);
+  margin-bottom:10px;font-weight:500;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.card .cfoot{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.card .cmeta{font-size:11px;color:var(--gray);display:inline-flex;align-items:center;gap:5px}
+.daylist .card{display:flex;gap:16px;align-items:flex-start;padding:18px}
+.daylist .card .cbody{flex:1}
+.daylist .card .ctime{min-width:64px;font-size:14px}
+
+/* ---------- modal ---------- */
+.overlay{position:fixed;inset:0;background:rgba(26,5,8,.45);backdrop-filter:blur(4px);
+  z-index:60;display:flex;align-items:flex-start;justify-content:center;padding:40px 20px;
+  overflow-y:auto;animation:fade .25s var(--ease)}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+.modal{width:100%;max-width:540px;background:var(--offwhite);border-radius:var(--r-card);
+  box-shadow:var(--sh-2);animation:rise .35s var(--ease);overflow:hidden}
+.modal .mhead{background:#fff;padding:22px 26px 18px;border-bottom:1px solid rgba(140,122,110,.14);
+  display:flex;align-items:flex-start;justify-content:space-between;gap:16px}
+.modal .mhead .mt{font-family:var(--display);font-size:20px;color:var(--maroon);font-weight:500}
+.modal .mhead .ms{font-size:12.5px;color:var(--gray);margin-top:3px}
+.xbtn{width:32px;height:32px;border-radius:50%;background:rgba(140,122,110,.12);flex:none;
+  display:flex;align-items:center;justify-content:center;font-size:16px;color:var(--maroon)}
+.xbtn:hover{background:rgba(140,122,110,.22)}
+.mbody{padding:22px 26px}
+.mb-cap{font-size:15px;line-height:1.55;color:var(--ink);white-space:pre-wrap;margin-bottom:16px}
+.mb-linkrow{display:flex;align-items:center;gap:10px;background:#fff;border-radius:var(--r-input);
+  padding:12px 14px;box-shadow:var(--sh-1);margin-bottom:20px}
+.mb-linkrow .lk{flex:1;font-size:13px;color:var(--maroon);overflow:hidden;text-overflow:ellipsis;
+  white-space:nowrap;font-weight:500}
+.section-label{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--gray);margin:4px 0 12px}
+.thread{display:flex;flex-direction:column;gap:10px;margin-bottom:18px}
+.bubble{background:#fff;border-radius:14px;padding:12px 14px;box-shadow:var(--sh-1)}
+.bubble.approver{background:var(--gold-tint)}
+.bubble .bh{display:flex;align-items:center;gap:8px;margin-bottom:5px}
+.bubble .bh .who{font-size:12px;font-weight:700;color:var(--maroon)}
+.bubble .bh .rl{font-size:9.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--gray);background:rgba(140,122,110,.14);padding:2px 7px;border-radius:var(--r-pill)}
+.bubble .bh .tm{font-size:11px;color:var(--gray);margin-left:auto}
+.bubble .bb{font-size:13.5px;line-height:1.5;color:var(--ink);white-space:pre-wrap}
+.actions{display:flex;gap:10px;flex-wrap:wrap;padding-top:6px;border-top:1px solid rgba(140,122,110,.14);
+  margin-top:4px;padding-top:18px}
+.replyrow{display:flex;gap:8px;margin-top:4px}
+.replyrow input{flex:1;background:#fff;border:1.5px solid rgba(140,122,110,.25);
+  border-radius:var(--r-pill);padding:10px 16px;font-size:14px}
+.replyrow input:focus{outline:none;border-color:var(--red)}
+
+.empty-state{text-align:center;padding:80px 20px;color:var(--gray)}
+.empty-state .es-ico{font-size:40px;margin-bottom:14px;opacity:.5}
+.empty-state .es-t{font-family:var(--display);font-size:22px;color:var(--maroon);margin-bottom:6px}
+.empty-state .es-d{font-size:14px;max-width:340px;margin:0 auto}
+
+.loading{display:flex;align-items:center;justify-content:center;min-height:50vh;
+  color:var(--gray);font-size:14px}
+
+/* ---------- responsive ---------- */
+@media(max-width:860px){
+  .weekgrid{grid-template-columns:1fr;gap:10px}
+  .daycol{min-height:auto}
+  .daycol:not(.has) .empty-day{display:none}
+  .summary{display:none}
+}
+@media(max-width:560px){
+  .topbar{gap:12px;padding:0 16px}
+  .whoami .email{display:none}
+  .wrap{padding:20px 16px 70px}
+  .toolbar h1{font-size:24px;width:100%}
+  .panel{padding:28px 22px}
+  .navdate .label{min-width:120px;font-size:13px}
+}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+
+
+/* ---- analytics / tags / performance (v2) ---- */
+.navtabs{display:flex;gap:4px;background:rgba(255,255,255,.13);border-radius:var(--r-pill);padding:4px;margin-left:4px;flex:none}
+.navtabs button{border-radius:var(--r-pill);padding:7px 15px;font-size:13px;font-weight:600;color:rgba(255,255,255,.72);transition:.2s var(--ease)}
+.navtabs button.on{background:#fff;color:var(--burgundy)}
+.tagrow{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px;max-width:100%}
+.tagchip{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--maroon);background:var(--blush);padding:3px 9px;border-radius:var(--r-pill);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.card .cfoot{flex-wrap:wrap}
+.cmeta{font-variant-numeric:tabular-nums}
+/* link row */
+.mb-linkrow{display:flex;flex-wrap:wrap;align-items:center;gap:10px;background:#fff;border-radius:var(--r-input);padding:12px 14px;box-shadow:var(--sh-1);margin-bottom:20px}
+.mb-linkrow .lk{flex:1 1 180px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--maroon);font-weight:500;font-size:13px;text-decoration:none}
+.lk-actions{display:flex;gap:8px;flex:none}
+/* detail header */
+.mhead-main{min-width:0;flex:1}
+.mhead-main .mt{margin-top:10px}
+.bubble .who{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:170px}
+.act-note{font-size:13px;font-weight:600;color:var(--gray);flex-basis:100%;margin-bottom:4px}
+.act-note.ok{color:var(--sage);flex-basis:auto;display:flex;align-items:center;gap:8px}
+.act-note.bad{color:var(--red)}
+.act-note.done{color:var(--burgundy);flex-basis:auto}
+/* insights controls */
+.an-controls{display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-bottom:22px}
+.seg{display:flex;background:#fff;border-radius:var(--r-pill);padding:4px;box-shadow:var(--sh-1);flex-wrap:wrap}
+.seg button{border-radius:var(--r-pill);padding:8px 14px;font-size:12.5px;font-weight:600;color:var(--gray);transition:.2s var(--ease)}
+.seg button.on{background:var(--burgundy);color:#fff}
+.seg.metric button.on{background:var(--red)}
+.an-select{background:#fff;border:1.5px solid rgba(140,122,110,.25);border-radius:var(--r-pill);padding:9px 16px;font-size:13px;font-weight:600;color:var(--maroon);max-width:100%}
+.an-select:focus{outline:none;border-color:var(--red)}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;margin-bottom:20px}
+.kpi{background:#fff;border-radius:16px;box-shadow:var(--sh-1);padding:18px 20px;min-width:0}
+.kpi .kl{font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--gray)}
+.kpi .kv{font-family:var(--display);font-size:26px;font-weight:500;color:var(--maroon);margin-top:6px;line-height:1.05;overflow-wrap:anywhere}
+.kpi .ks{font-size:12px;color:var(--gray);margin-top:6px}
+.chartcard{background:#fff;border-radius:var(--r-card);box-shadow:var(--sh-1);padding:22px 24px;margin-bottom:18px;overflow:hidden}
+.chartcard h3{font-family:var(--display);font-size:18px;color:var(--maroon);font-weight:500}
+.chartcard .csub{font-size:12.5px;color:var(--gray);margin:3px 0 16px}
+.chartrow{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.takeaway{background:var(--gold-tint);border-radius:14px;padding:15px 18px;font-size:13.5px;color:#6f5212;line-height:1.55}
+.takeaway b{color:#5a3f0a;font-weight:700}
+/* pie */
+.pie-wrap{display:flex;gap:24px;align-items:center;flex-wrap:wrap}
+.pie-svg{width:164px;height:164px;flex:none}
+.pie-legend{display:flex;flex-direction:column;gap:9px;min-width:170px;flex:1}
+.ple{display:flex;align-items:center;gap:9px;font-size:13px;min-width:0}
+.pdot{width:11px;height:11px;border-radius:3px;flex:none}
+.pll{color:var(--ink);font-weight:500;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.plv{color:var(--gray);font-weight:700;font-variant-numeric:tabular-nums;flex:none}
+/* performance inputs */
+.perf-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(74px,1fr));gap:12px;margin-bottom:12px}
+.perf-grid .field{margin-bottom:0}
+.perf-view{display:flex;gap:24px;flex-wrap:wrap;background:#fff;border-radius:14px;padding:14px 18px;box-shadow:var(--sh-1);margin-bottom:6px}
+.perf-view .pv{display:flex;flex-direction:column}
+.perf-view .pvl{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--gray)}
+.perf-view .pvn{font-family:var(--display);font-size:24px;color:var(--maroon);font-weight:500}
+/* theme picker in editor */
+.chip-pick{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px}
+.pchip{border:1.5px solid rgba(140,122,110,.3);border-radius:var(--r-pill);padding:7px 14px;font-size:13px;font-weight:600;color:var(--maroon);background:#fff;transition:.15s var(--ease);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pchip.on{background:var(--burgundy);color:#fff;border-color:var(--burgundy)}
+.addtheme{display:flex;gap:8px}
+.addtheme input{flex:1;min-width:0;background:#fff;border:1.5px solid rgba(140,122,110,.25);border-radius:var(--r-pill);padding:9px 14px;font-size:14px}
+.addtheme input:focus{outline:none;border-color:var(--red)}
+/* themes manager */
+.theme-mgr{max-width:640px}
+.theme-add{display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap}
+.theme-add input{flex:1;min-width:160px;background:#fff;border:1.5px solid rgba(140,122,110,.25);border-radius:var(--r-input);padding:12px 14px;font-size:15px}
+.theme-add input:focus{outline:none;border-color:var(--red);box-shadow:0 0 0 4px rgba(164,0,17,.1)}
+.theme-row{display:flex;align-items:center;gap:12px;background:#fff;border-radius:14px;box-shadow:var(--sh-1);padding:14px 18px;margin-bottom:10px;flex-wrap:wrap}
+.theme-row .tn{font-weight:600;color:var(--ink);flex:1;min-width:120px;overflow:hidden;text-overflow:ellipsis}
+.theme-row .tc{font-size:12px;color:var(--gray);flex:none}
+.theme-row .ti{flex:1;min-width:140px;border:1.5px solid var(--red);border-radius:10px;padding:8px 12px;font-size:14px;outline:none}
+@media(max-width:1180px){.summary{display:none}}
+@media(max-width:760px){.chartrow{grid-template-columns:1fr}}
+@media(max-width:560px){
+  .topbar{gap:10px;padding:0 12px}
+  .topbar .brand{font-size:18px}
+  .navtabs{margin-left:0}
+  .navtabs button{padding:6px 11px;font-size:12px}
+  .whoami .rolebadge{display:none}
+}
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel">
+const {useState,useEffect,useCallback} = React;
+
+/* ===================== helpers ===================== */
+const DOW=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+const DOW_MON=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+const DOW_FULL={Mon:"Monday",Tue:"Tuesday",Wed:"Wednesday",Thu:"Thursday",Fri:"Friday",Sat:"Saturday",Sun:"Sunday"};
+const MON=["January","February","March","April","May","June","July","August","September","October","November","December"];
+function startOfWeek(d){const x=new Date(d);const day=(x.getDay()+6)%7;x.setDate(x.getDate()-day);x.setHours(0,0,0,0);return x;}
+function addDays(d,n){const x=new Date(d);x.setDate(x.getDate()+n);return x;}
+function sameDay(a,b){return a.getFullYear()===b.getFullYear()&&a.getMonth()===b.getMonth()&&a.getDate()===b.getDate();}
+function fmtTime(d){let h=d.getHours();const m=d.getMinutes();const ap=h>=12?"PM":"AM";h=h%12||12;return h+":"+String(m).padStart(2,"0")+" "+ap;}
+function toLocalInputs(iso){const d=new Date(iso);const p=n=>String(n).padStart(2,"0");
+  return {date:`${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`,time:`${p(d.getHours())}:${p(d.getMinutes())}`};}
+function fromLocalInputs(date,time){return new Date(date+"T"+time).toISOString();}
+function domainOf(url){try{return new URL(url).hostname.replace(/^www\./,"");}catch(e){return url;}}
+function tagsOf(p){return (p.tags&&p.tags.length)?p.tags:(p.tag?[p.tag]:[]);}
+function uid(){return (window.crypto&&crypto.randomUUID)?crypto.randomUUID():("id-"+Date.now()+"-"+Math.random().toString(16).slice(2));}
+function nfmt(n){return (n===null||n===undefined)?"—":Number(n).toLocaleString();}
+function sum(a){return a.reduce((s,x)=>s+(x||0),0);}
+function copyText(t){
+  try{if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(t);return true;}}catch(e){}
+  try{const ta=document.createElement("textarea");ta.value=t;ta.style.position="fixed";ta.style.opacity="0";
+    document.body.appendChild(ta);ta.focus();ta.select();const ok=document.execCommand("copy");document.body.removeChild(ta);return ok;}catch(e){}
+  return false;
+}
+const STATUS_LABEL={pending:"Pending",approved:"Approved",needs_changes:"Needs changes",posted:"Posted"};
+const ORDER=["pending","needs_changes","approved","posted"];
+const METRIC_COL={views:"views",likes:"likes",comments:"comments_count",shares:"shares"};
+const METRIC_LABEL={views:"Views",likes:"Likes",comments:"Comments",shares:"Shares"};
+const METRIC_COLOR={views:"#5A000B",likes:"#A40011",comments:"#C5973B",shares:"#5E7355"};
+const THEME_COLORS=["#A40011","#C5973B","#5E7355","#50000B","#FF9693","#8C7A6E","#7A5050","#3D7068","#B5651D","#9C7CB5"];
+const themeColor=i=>THEME_COLORS[i%THEME_COLORS.length];
+const TOD=[[0,"12-4a"],[4,"4-8a"],[8,"8a-12p"],[12,"12-4p"],[16,"4-8p"],[20,"8p-12a"]];
+function todSlot(h){return h<4?0:h<8?1:h<12?2:h<16?3:h<20?4:5;}
+function periodBucket(d,period){const p=n=>String(n).padStart(2,"0");
+  if(period==="day")  return {key:`${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`,label:`${MON[d.getMonth()].slice(0,3)} ${d.getDate()}`,t:new Date(d.getFullYear(),d.getMonth(),d.getDate()).getTime()};
+  if(period==="week"){const s=startOfWeek(d);return {key:"w"+s.getTime(),label:`${MON[s.getMonth()].slice(0,3)} ${s.getDate()}`,t:s.getTime()};}
+  if(period==="month")return {key:`${d.getFullYear()}-${p(d.getMonth()+1)}`,label:`${MON[d.getMonth()].slice(0,3)} '${String(d.getFullYear()).slice(2)}`,t:new Date(d.getFullYear(),d.getMonth(),1).getTime()};
+  return {key:""+d.getFullYear(),label:""+d.getFullYear(),t:new Date(d.getFullYear(),0,1).getTime()};
+}
+const PERIOD_CAP={day:14,week:12,month:12,year:6};
+
+/* ===================== charts ===================== */
+function LineChart({labels,data,color}){
+  const W=640,H=210,padL=46,padR=14,padT=14,padB=30;
+  const n=data.length, max=Math.max(1,...data);
+  const x=i=> n<=1 ? padL+(W-padL-padR)/2 : padL + i*(W-padL-padR)/(n-1);
+  const y=v=> H-padB - (v/max)*(H-padT-padB);
+  const showLabel=i=> n<=8 || i%Math.ceil(n/7)===0 || i===n-1;
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} style={{width:"100%",height:"auto",display:"block"}} role="img">
+      {[0,.5,1].map((g,k)=>{const yy=padT+g*(H-padT-padB);return (
+        <g key={k}>
+          <line x1={padL} y1={yy} x2={W-padR} y2={yy} stroke="rgba(140,122,110,.18)" strokeWidth="1"/>
+          <text x={padL-8} y={yy+4} textAnchor="end" fontSize="10" fill="#8C7A6E">{nfmt(Math.round(max*(1-g)))}</text>
+        </g>);})}
+      {n>1 && <polyline fill="none" stroke={color} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" points={data.map((v,i)=>x(i)+","+y(v)).join(" ")}/>}
+      {data.map((v,i)=>(<circle key={i} cx={x(i)} cy={y(v)} r="3.5" fill="#fff" stroke={color} strokeWidth="2"/>))}
+      {labels.map((l,i)=> showLabel(i) ? <text key={i} x={x(i)} y={H-10} textAnchor="middle" fontSize="10" fill="#8C7A6E">{l}</text> : null)}
+    </svg>
+  );
+}
+function BarChart({bars,color}){
+  const W=320,H=190,padL=8,padR=8,padT=12,padB=26;
+  const max=Math.max(1,...bars.map(b=>b.value));
+  const bw=(W-padL-padR)/bars.length;
+  const best=bars.reduce((bi,b,i,a)=> b.value>a[bi].value?i:bi,0);
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} style={{width:"100%",height:"auto",display:"block"}} role="img">
+      {bars.map((b,i)=>{const h=(b.value/max)*(H-padT-padB);const bx=padL+i*bw+bw*0.16;const bwv=bw*0.68;
+        return (<g key={i}>
+          <rect x={bx} y={H-padB-h} width={bwv} height={Math.max(0,h)} rx="4" fill={i===best&&b.value>0?"var(--sage)":color} opacity={i===best?1:.5}/>
+          <text x={bx+bwv/2} y={H-padB+14} textAnchor="middle" fontSize="9.5" fill="#8C7A6E">{b.label}</text>
+          {b.value>0 && <text x={bx+bwv/2} y={H-padB-h-5} textAnchor="middle" fontSize="9.5" fontWeight="700" fill="#5A000B">{nfmt(Math.round(b.value))}</text>}
+        </g>);})}
+    </svg>
+  );
+}
+function PieChart({slices}){
+  const total=sum(slices.map(s=>s.value))||1;
+  const R=72,cx=82,cy=82;let ang=-Math.PI/2;
+  const arcs=slices.map(s=>{
+    const frac=s.value/total;const a0=ang;const a1=ang+frac*Math.PI*2;ang=a1;
+    const large=(a1-a0)>Math.PI?1:0;
+    const x0=cx+R*Math.cos(a0),y0=cy+R*Math.sin(a0),x1=cx+R*Math.cos(a1),y1=cy+R*Math.sin(a1);
+    const d=frac>=0.999?`M ${cx} ${cy-R} A ${R} ${R} 0 1 1 ${cx-0.01} ${cy-R} Z`:`M ${cx} ${cy} L ${x0.toFixed(2)} ${y0.toFixed(2)} A ${R} ${R} 0 ${large} 1 ${x1.toFixed(2)} ${y1.toFixed(2)} Z`;
+    return {d,color:s.color,label:s.label,pct:Math.round(frac*100),value:s.value};
+  });
+  return (
+    <div className="pie-wrap">
+      <svg viewBox="0 0 164 164" className="pie-svg" role="img">
+        {arcs.map((a,i)=><path key={i} d={a.d} fill={a.color} stroke="#fff" strokeWidth="1.5"/>)}
+      </svg>
+      <div className="pie-legend">
+        {arcs.map((a,i)=>(<div key={i} className="ple"><span className="pdot" style={{background:a.color}}></span><span className="pll">{a.label}</span><span className="plv">{a.pct}%</span></div>))}
+      </div>
+    </div>
+  );
+}
+
+/* ===================== Insights ===================== */
+function AnalyticsPage({posts,themes}){
+  const [period,setPeriod]=useState("week");
+  const [metric,setMetric]=useState("views");
+  const [tag,setTag]=useState("__all__");
+  const col=METRIC_COL[metric];
+  const ml=METRIC_LABEL[metric].toLowerCase();
+  const themeList=Array.from(new Set([...(themes||[]),...posts.flatMap(tagsOf)])).filter(Boolean).sort();
+
+  const scoped=posts.filter(p=> tag==="__all__"||tagsOf(p).includes(tag));
+  const ms=scoped.filter(p=> p[col]!==null && p[col]!==undefined);
+  const counted=ms.length;
+  const totViews=sum(scoped.map(p=>p.views)),totLikes=sum(scoped.map(p=>p.likes)),totComments=sum(scoped.map(p=>p.comments_count)),totShares=sum(scoped.map(p=>p.shares));
+  const avg=counted?Math.round(sum(ms.map(p=>p[col]))/counted):0;
+
+  const bmap={};
+  ms.forEach(p=>{const b=periodBucket(new Date(p.scheduled_at),period);(bmap[b.key]=bmap[b.key]||{...b,v:0}).v+=p[col]||0;});
+  let buckets=Object.values(bmap).sort((a,b)=>a.t-b.t).slice(-PERIOD_CAP[period]);
+
+  const dowAgg=DOW_MON.map(()=>({s:0,c:0}));
+  ms.forEach(p=>{const i=(new Date(p.scheduled_at).getDay()+6)%7;dowAgg[i].s+=p[col]||0;dowAgg[i].c++;});
+  const dowBars=DOW_MON.map((l,i)=>({label:l,value:dowAgg[i].c?dowAgg[i].s/dowAgg[i].c:0}));
+  const todAgg=TOD.map(()=>({s:0,c:0}));
+  ms.forEach(p=>{const i=todSlot(new Date(p.scheduled_at).getHours());todAgg[i].s+=p[col]||0;todAgg[i].c++;});
+  const todBars=TOD.map((t,i)=>({label:t[1],value:todAgg[i].c?todAgg[i].s/todAgg[i].c:0}));
+  const bestDay=dowBars.reduce((b,x)=>x.value>b.value?x:b,{value:-1,label:"—"});
+  const bestTod=todBars.reduce((b,x)=>x.value>b.value?x:b,{value:-1,label:"—"});
+
+  const pieMap={};
+  ms.forEach(p=>tagsOf(p).forEach(t=>{pieMap[t]=(pieMap[t]||0)+(p[col]||0);}));
+  let pie=Object.entries(pieMap).map(([label,value])=>({label,value})).filter(x=>x.value>0).sort((a,b)=>b.value-a.value);
+  if(pie.length>8){const top=pie.slice(0,7);const other=sum(pie.slice(7).map(x=>x.value));top.push({label:"Other",value:other});pie=top;}
+  pie=pie.map((s,i)=>({...s,color:themeColor(i)}));
+
+  return (
+    <>
+      <div className="toolbar"><h1>Insights</h1></div>
+      <div className="an-controls">
+        <div className="seg">{["day","week","month","year"].map(p=>(<button key={p} className={period===p?"on":""} onClick={()=>setPeriod(p)}>{p[0].toUpperCase()+p.slice(1)}</button>))}</div>
+        <div className="seg metric">{["views","likes","comments","shares"].map(m=>(<button key={m} className={metric===m?"on":""} onClick={()=>setMetric(m)}>{METRIC_LABEL[m]}</button>))}</div>
+        <select className="an-select" value={tag} onChange={e=>setTag(e.target.value)}>
+          <option value="__all__">All themes</option>
+          {themeList.map(t=><option key={t} value={t}>{t}</option>)}
+        </select>
+      </div>
+
+      {counted===0 ? (
+        <div className="empty-state"><div className="es-ico">📈</div><div className="es-t">No numbers yet</div>
+          <div className="es-d">Open a posted item and type in its views, likes, comments and shares. Once a few posts have data, the graphs and best-time breakdowns appear here.</div></div>
+      ) : (<>
+        <div className="kpis">
+          <div className="kpi"><div className="kl">Total views</div><div className="kv">{nfmt(totViews)}</div></div>
+          <div className="kpi"><div className="kl">Total likes</div><div className="kv">{nfmt(totLikes)}</div></div>
+          <div className="kpi"><div className="kl">Total comments</div><div className="kv">{nfmt(totComments)}</div></div>
+          <div className="kpi"><div className="kl">Total shares</div><div className="kv">{nfmt(totShares)}</div></div>
+          <div className="kpi"><div className="kl">Avg {ml} / post</div><div className="kv">{nfmt(avg)}</div><div className="ks">across {counted} post{counted!==1?"s":""}</div></div>
+        </div>
+
+        <div className="chartcard">
+          <h3>{METRIC_LABEL[metric]} over time</h3>
+          <div className="csub">By {period}{tag!=="__all__"?` · ${tag}`:" · all themes"}</div>
+          <LineChart labels={buckets.map(b=>b.label)} data={buckets.map(b=>b.v)} color={METRIC_COLOR[metric]}/>
+        </div>
+
+        <div className="chartrow">
+          <div className="chartcard"><h3>Best day to post</h3><div className="csub">Average {ml} by weekday</div><BarChart bars={dowBars} color={METRIC_COLOR[metric]}/></div>
+          <div className="chartcard"><h3>Best time to post</h3><div className="csub">Average {ml} by time of day</div><BarChart bars={todBars} color={METRIC_COLOR[metric]}/></div>
+        </div>
+
+        {pie.length>0 &&
+          <div className="chartcard"><h3>Best themes</h3><div className="csub">Share of {ml} by theme</div><PieChart slices={pie}/></div>}
+
+        <div className="takeaway">
+          {tag==="__all__"?"Across all themes, ":`For ${tag}, `}
+          your strongest {ml} land on <b>{DOW_FULL[bestDay.label]||bestDay.label}</b> and around <b>{bestTod.label}</b> (averaging {nfmt(Math.round(bestTod.value))} {ml}).
+          {pie.length>1 ? <> Your top theme by {ml} is <b>{pie[0].label}</b>.</> : null} Switch metric or theme above to compare.
+        </div>
+      </>)}
+    </>
+  );
+}
+
+/* ===================== Themes manager (creator) ===================== */
+function ThemesPage({themes,posts,onAdd,onRename,onDelete}){
+  const [newName,setNewName]=useState("");
+  const [editId,setEditId]=useState(null);
+  const [editVal,setEditVal]=useState("");
+  const usage=t=>posts.filter(p=>tagsOf(p).includes(t)).length;
+  function add(){const n=newName.trim();if(!n)return;onAdd(n);setNewName("");}
+  function startEdit(t){setEditId(t);setEditVal(t);}
+  function commitEdit(){const n=editVal.trim();if(n&&n!==editId)onRename(editId,n);setEditId(null);setEditVal("");}
+  return (
+    <>
+      <div className="toolbar"><h1>Themes</h1></div>
+      <div className="theme-mgr">
+        <div className="theme-add">
+          <input value={newName} onChange={e=>setNewName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&add()} placeholder="Add a theme, e.g. Product launch"/>
+          <button className="btn btn-primary" onClick={add}>Add theme</button>
+        </div>
+        {themes.length===0
+          ? <div className="empty-state" style={{padding:"56px 20px"}}><div className="es-ico">🏷️</div><div className="es-t">No themes yet</div><div className="es-d">Create themes here, then tag your posts with one or more of them. Insights will break down performance by theme.</div></div>
+          : themes.map(t=>(
+            <div className="theme-row" key={t}>
+              {editId===t
+                ? <input className="ti" value={editVal} autoFocus onChange={e=>setEditVal(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")commitEdit();if(e.key==="Escape"){setEditId(null);}}}/>
+                : <span className="tn">{t}</span>}
+              <span className="tc">{usage(t)} post{usage(t)!==1?"s":""}</span>
+              {editId===t
+                ? <><button className="btn btn-soft btn-sm" onClick={commitEdit}>Save</button><button className="btn btn-ghost btn-sm" onClick={()=>setEditId(null)}>Cancel</button></>
+                : <><button className="btn btn-soft btn-sm" onClick={()=>startEdit(t)}>Rename</button><button className="btn btn-ghost btn-sm" onClick={()=>{if(confirm(`Delete the theme "${t}"? It will be removed from ${usage(t)} post(s).`))onDelete(t);}}>Delete</button></>}
+            </div>))}
+      </div>
+    </>
+  );
+}
+
+/* ===================== Post card ===================== */
+function PostCard({post,onOpen,compact}){
+  const d=new Date(post.scheduled_at);const tags=tagsOf(post);
+  return (
+    <button className="card" onClick={()=>onOpen(post)}>
+      {compact ? <div className="ctime">{fmtTime(d)}</div> : null}
+      <div className={compact?"":"cbody"}>
+        {!compact && <div className="ctime">{fmtTime(d)}</div>}
+        {tags.length>0 && <div className="tagrow">{tags.map(t=><span key={t} className="tagchip">{t}</span>)}</div>}
+        <div className="ccap">{post.caption||"(no caption yet)"}</div>
+        <div className="clink">🔗 {domainOf(post.media_link)}</div>
+        <div className="cfoot">
+          <span className={"badge s-"+post.status}><span className={"dot d-"+post.status}></span>{STATUS_LABEL[post.status]}</span>
+          {(post.views!=null||post.likes!=null) && <span className="cmeta">{nfmt(post.views)} views · {nfmt(post.likes)} likes</span>}
+        </div>
+      </div>
+    </button>
+  );
+}
+
+/* ===================== Detail ===================== */
+function Detail({post,comments,me,onClose,onAction,onComment,onMeta}){
+  const [reply,setReply]=useState("");
+  const [copied,setCopied]=useState("");
+  const [suggest,setSuggest]=useState("");
+  const [showSuggest,setShowSuggest]=useState(false);
+  const [v,setV]=useState(post.views==null?"":String(post.views));
+  const [l,setL]=useState(post.likes==null?"":String(post.likes));
+  const [c,setC]=useState(post.comments_count==null?"":String(post.comments_count));
+  const [sh,setSh]=useState(post.shares==null?"":String(post.shares));
+  const [savedMeta,setSavedMeta]=useState(false);
+  const [confirmDel,setConfirmDel]=useState(false);
+  const d=new Date(post.scheduled_at);const tags=tagsOf(post);
+  const isApprover=me.role==="approver",isCreator=me.role==="creator";
+  const num=s=>{const n=parseInt(s,10);return isNaN(n)?null:n;};
+  return (
+    <div className="overlay" onClick={onClose}>
+      <div className="modal" onClick={e=>e.stopPropagation()}>
+        <div className="mhead">
+          <div className="mhead-main">
+            <span className={"badge s-"+post.status}><span className={"dot d-"+post.status}></span>{STATUS_LABEL[post.status]}</span>
+            {tags.length>0 && <div className="tagrow" style={{marginTop:8}}>{tags.map(t=><span key={t} className="tagchip">{t}</span>)}</div>}
+            <div className="mt">{DOW[d.getDay()]}, {MON[d.getMonth()]} {d.getDate()}</div>
+            <div className="ms">Scheduled for {fmtTime(d)}</div>
+          </div>
+          <button className="xbtn" onClick={onClose}>✕</button>
+        </div>
+        <div className="mbody">
+          <div className="mb-cap">{post.caption||"(no caption yet)"}</div>
+          <div className="mb-linkrow">
+            <a className="lk" href={post.media_link} target="_blank" rel="noopener noreferrer">🔗 {post.media_link}</a>
+            <div className="lk-actions">
+              <button className="btn btn-soft btn-sm" onClick={()=>{const ok=copyText(post.media_link);setCopied(ok?"Copied":"Copy failed");setTimeout(()=>setCopied(""),1500);}}>{copied||"Copy"}</button>
+              <a className="btn btn-dark btn-sm" href={post.media_link} target="_blank" rel="noopener noreferrer">Open</a>
+            </div>
+          </div>
+
+          <div className="section-label">Performance</div>
+          {isCreator ? (<>
+            <div className="perf-grid">
+              <div className="field"><label>Views</label><input type="number" min="0" value={v} onChange={e=>{setV(e.target.value);setSavedMeta(false);}} placeholder="0"/></div>
+              <div className="field"><label>Likes</label><input type="number" min="0" value={l} onChange={e=>{setL(e.target.value);setSavedMeta(false);}} placeholder="0"/></div>
+              <div className="field"><label>Comments</label><input type="number" min="0" value={c} onChange={e=>{setC(e.target.value);setSavedMeta(false);}} placeholder="0"/></div>
+              <div className="field"><label>Shares</label><input type="number" min="0" value={sh} onChange={e=>{setSh(e.target.value);setSavedMeta(false);}} placeholder="0"/></div>
+            </div>
+            <button className="btn btn-soft btn-sm" style={{marginBottom:18}} onClick={()=>{onMeta(post.id,{views:num(v),likes:num(l),comments_count:num(c),shares:num(sh)});setSavedMeta(true);}}>{savedMeta?"Saved ✓":"Save numbers"}</button>
+          </>) : (
+            <div className="perf-view">
+              <div className="pv"><span className="pvl">Views</span><span className="pvn">{nfmt(post.views)}</span></div>
+              <div className="pv"><span className="pvl">Likes</span><span className="pvn">{nfmt(post.likes)}</span></div>
+              <div className="pv"><span className="pvl">Comments</span><span className="pvn">{nfmt(post.comments_count)}</span></div>
+              <div className="pv"><span className="pvl">Shares</span><span className="pvn">{nfmt(post.shares)}</span></div>
+            </div>)}
+
+          <div className="section-label">Discussion</div>
+          <div className="thread">
+            {comments.length===0 && <div style={{fontSize:13,color:"var(--gray)"}}>No comments yet.</div>}
+            {comments.map(cm=>(
+              <div key={cm.id} className={"bubble "+(cm.author_role==="approver"?"approver":"")}>
+                <div className="bh"><span className="who">{cm.author_email}</span><span className="rl">{cm.author_role}</span>
+                  <span className="tm">{new Date(cm.created_at).toLocaleString([], {month:"short",day:"numeric",hour:"numeric",minute:"2-digit"})}</span></div>
+                <div className="bb">{cm.body}</div>
+              </div>))}
+          </div>
+          <div className="replyrow">
+            <input value={reply} onChange={e=>setReply(e.target.value)} placeholder="Add a comment…" onKeyDown={e=>{if(e.key==="Enter"&&reply.trim()){onComment(reply.trim());setReply("");}}}/>
+            <button className="btn btn-soft btn-sm" disabled={!reply.trim()} onClick={()=>{onComment(reply.trim());setReply("");}}>Send</button>
+          </div>
+
+          {isCreator && confirmDel && <div className="actions">
+            <span className="act-note bad">Delete this post permanently? This can't be undone.</span>
+            <button className="btn btn-primary" onClick={()=>onAction("__delete__")}>Delete</button>
+            <button className="btn btn-soft" onClick={()=>setConfirmDel(false)}>Cancel</button>
+          </div>}
+
+          {isApprover && post.status==="pending" && <div className="actions">
+            {!showSuggest
+              ? <><button className="btn btn-sage" onClick={()=>onAction("approved")}>✓ Approve</button><button className="btn btn-ghost" onClick={()=>setShowSuggest(true)}>Request changes</button></>
+              : <div style={{width:"100%"}}>
+                  <div className="field"><label>What should change?</label><textarea value={suggest} onChange={e=>setSuggest(e.target.value)} placeholder="Your suggestion for the creator…" autoFocus/></div>
+                  <div style={{display:"flex",gap:10,flexWrap:"wrap"}}><button className="btn btn-primary" disabled={!suggest.trim()} onClick={()=>onAction("needs_changes",suggest.trim())}>Send back with changes</button><button className="btn btn-soft" onClick={()=>{setShowSuggest(false);setSuggest("")}}>Cancel</button></div>
+                </div>}
+          </div>}
+          {isApprover && post.status==="approved" && <div className="actions"><span className="act-note ok">✓ You approved this post.</span><button className="btn btn-soft btn-sm" onClick={()=>onAction("pending")}>Reopen for review</button></div>}
+          {isCreator && !confirmDel && post.status==="needs_changes" && <div className="actions"><span className="act-note bad">Your leader asked for changes. Edit, then resubmit.</span><button className="btn btn-dark" onClick={()=>onAction("__edit__")}>Edit post</button><button className="btn btn-primary" onClick={()=>onAction("pending","Resubmitted for review.")}>Resubmit for review</button><button className="btn btn-ghost btn-sm" onClick={()=>setConfirmDel(true)}>Delete</button></div>}
+          {isCreator && post.status==="approved" && <div className="actions"><button className="btn btn-dark" onClick={()=>onAction("posted")}>Mark as posted</button><button className="btn btn-soft btn-sm" onClick={()=>onAction("__edit__")}>Edit</button></div>}
+          {isCreator && !confirmDel && post.status==="pending" && <div className="actions"><span className="act-note">Waiting on your leader's review.</span><button className="btn btn-soft btn-sm" onClick={()=>onAction("__edit__")}>Edit</button><button className="btn btn-ghost btn-sm" onClick={()=>setConfirmDel(true)}>Delete</button></div>}
+          {isCreator && !confirmDel && post.status==="posted" && <div className="actions"><span className="act-note done">✓ Marked as posted.</span><button className="btn btn-soft btn-sm" onClick={()=>onAction("__edit__")}>Edit</button><button className="btn btn-ghost btn-sm" onClick={()=>setConfirmDel(true)}>Delete</button></div>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ===================== Editor ===================== */
+function Editor({post,themes,onAddTheme,onClose,onSave}){
+  const init = post ? {...toLocalInputs(post.scheduled_at),link:post.media_link,cap:post.caption,tags:tagsOf(post)}
+                     : {date:toLocalInputs(new Date().toISOString()).date,time:"09:00",link:"",cap:"",tags:[]};
+  const [date,setDate]=useState(init.date);
+  const [time,setTime]=useState(init.time);
+  const [link,setLink]=useState(init.link);
+  const [cap,setCap]=useState(init.cap);
+  const [selected,setSelected]=useState(init.tags);
+  const [newTheme,setNewTheme]=useState("");
+  const [err,setErr]=useState("");
+  const available=Array.from(new Set([...(themes||[]),...selected]));
+  function toggle(t){setSelected(s=>s.includes(t)?s.filter(x=>x!==t):[...s,t]);}
+  function addNew(){const n=newTheme.trim();if(!n)return;if(onAddTheme)onAddTheme(n);setSelected(s=>s.includes(n)?s:[...s,n]);setNewTheme("");}
+  function save(){
+    if(!link.trim()){setErr("Add the media link for this post.");return;}
+    if(!date||!time){setErr("Pick a date and time.");return;}
+    if(selected.length===0){setErr("Pick at least one theme so this post shows in Insights.");return;}
+    onSave({media_link:link.trim(),caption:cap,scheduled_at:fromLocalInputs(date,time),tags:selected,tag:selected[0]||""});
+  }
+  return (
+    <div className="overlay" onClick={onClose}>
+      <div className="modal" onClick={e=>e.stopPropagation()} style={{maxWidth:480}}>
+        <div className="mhead"><div className="mt">{post?"Edit post":"New post"}</div><button className="xbtn" onClick={onClose}>✕</button></div>
+        <div className="mbody">
+          {err && <div className="err">{err}</div>}
+          <div className="field"><label>Media link</label><input value={link} onChange={e=>setLink(e.target.value)} placeholder="https://…  (image, video, or draft link)"/></div>
+          <div className="field"><label>Caption</label><textarea value={cap} onChange={e=>setCap(e.target.value)} placeholder="Write the caption…"/></div>
+          <div className="field"><label>Themes (pick one or more)</label>
+            {available.length>0 && <div className="chip-pick">{available.map(t=>(<button key={t} type="button" className={"pchip"+(selected.includes(t)?" on":"")} onClick={()=>toggle(t)}>{t}</button>))}</div>}
+            <div className="addtheme"><input value={newTheme} onChange={e=>setNewTheme(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();addNew();}}} placeholder="New theme…"/><button type="button" className="btn btn-soft btn-sm" onClick={addNew}>Add</button></div>
+          </div>
+          <div style={{display:"flex",gap:12}}>
+            <div className="field" style={{flex:1}}><label>Date</label><input type="date" value={date} onChange={e=>setDate(e.target.value)}/></div>
+            <div className="field" style={{flex:1}}><label>Time</label><input type="time" value={time} onChange={e=>setTime(e.target.value)}/></div>
+          </div>
+          <button className="btn btn-primary" style={{width:"100%",justifyContent:"center"}} onClick={save}>{post?"Save changes":"Add to schedule"}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ===================== App ===================== */
+function App({db,me,onSignOut}){
+  const [page,setPage]=useState("schedule");
+  const [posts,setPosts]=useState([]);
+  const [comments,setComments]=useState({});
+  const [themes,setThemes]=useState([]);
+  const [loading,setLoading]=useState(true);
+  const [view,setView]=useState("week");
+  const [anchor,setAnchor]=useState(startOfWeek(new Date()));
+  const [dayAnchor,setDayAnchor]=useState(()=>{const d=new Date();d.setHours(0,0,0,0);return d;});
+  const [openId,setOpenId]=useState(null);
+  const [editing,setEditing]=useState(null);
+  const [onlyMine,setOnlyMine]=useState(false);
+  const [err,setErr]=useState("");
+  const isCreator=me.role==="creator";
+
+  const load=useCallback(async ()=>{
+    try{
+      const ps=await db.listPosts();ps.sort((x,y)=>new Date(x.scheduled_at)-new Date(y.scheduled_at));setPosts(ps);
+      setComments(await db.listComments());
+      setThemes(await db.getThemes());
+    }catch(e){setErr("Couldn't load your workspace. "+(e.message||""));}finally{setLoading(false);}
+  },[db]);
+  useEffect(()=>{load();const t=setInterval(load,15000);return ()=>clearInterval(t);},[load]);
+
+  const open=openId?posts.find(p=>p.id===openId):null;
+
+  async function persistThemes(next){setThemes(next);try{await db.setThemes(next);}catch(e){setErr("Couldn't save themes.");}}
+  async function addTheme(name){name=(name||"").trim();if(!name||themes.includes(name))return;await persistThemes([...themes,name]);}
+  async function renameTheme(oldN,newN){
+    newN=(newN||"").trim();if(!newN||oldN===newN)return;
+    await persistThemes(Array.from(new Set(themes.map(t=>t===oldN?newN:t))));
+    const affected=posts.filter(p=>tagsOf(p).includes(oldN));
+    for(const p of affected){const nt=Array.from(new Set(tagsOf(p).map(t=>t===oldN?newN:t)));try{const saved=await db.savePost({...p,tags:nt,tag:nt[0]||"",updated_at:new Date().toISOString()});setPosts(ps=>ps.map(x=>x.id===saved.id?saved:x));}catch(e){}}
+  }
+  async function deleteTheme(name){
+    await persistThemes(themes.filter(t=>t!==name));
+    const affected=posts.filter(p=>tagsOf(p).includes(name));
+    for(const p of affected){const nt=tagsOf(p).filter(t=>t!==name);try{const saved=await db.savePost({...p,tags:nt,tag:nt[0]||"",updated_at:new Date().toISOString()});setPosts(ps=>ps.map(x=>x.id===saved.id?saved:x));}catch(e){}}
+  }
+
+  async function addComment(postId,body,role){
+    const c={id:uid(),post_id:postId,author_email:me.email,author_role:role||me.role,body,created_at:new Date().toISOString()};
+    setComments(m=>({...m,[postId]:[...(m[postId]||[]),c]}));
+    try{await db.addComment(c);}catch(e){setErr("Couldn't save comment.");}
+  }
+  async function savePost(data){
+    try{
+      if(editing&&editing!=="new"){const up={...editing,...data,updated_at:new Date().toISOString()};const saved=await db.savePost(up);setPosts(ps=>ps.map(p=>p.id===saved.id?saved:p));}
+      else{const np={...data,status:"pending",created_by:me.email,created_at:new Date().toISOString(),views:null,likes:null,comments_count:null,shares:null};const saved=await db.savePost(np);setPosts(ps=>[...ps,saved]);}
+      setEditing(null);
+    }catch(e){setErr("Couldn't save the post. "+(e.message||""));}
+  }
+  async function saveMeta(id,patch){
+    const cur=posts.find(p=>p.id===id);if(!cur)return;
+    try{const saved=await db.savePost({...cur,...patch,updated_at:new Date().toISOString()});setPosts(ps=>ps.map(p=>p.id===saved.id?saved:p));}catch(e){setErr("Couldn't save the numbers.");}
+  }
+  async function doAction(kind,note){
+    if(!open)return;
+    if(kind==="__edit__"){setEditing(open);setOpenId(null);return;}
+    if(kind==="__delete__"){try{await db.deletePost(open.id);setPosts(ps=>ps.filter(p=>p.id!==open.id));setOpenId(null);}catch(e){setErr("Couldn't delete.");}return;}
+    try{const saved=await db.savePost({...open,status:kind,updated_at:new Date().toISOString()});setPosts(ps=>ps.map(p=>p.id===saved.id?saved:p));if(note)await addComment(open.id,note,kind==="needs_changes"?"approver":me.role);}catch(e){setErr("Couldn't update.");}
+  }
+
+  const weekDays=Array.from({length:7},(_,i)=>addDays(anchor,i));
+  const inDay=p=>sameDay(new Date(p.scheduled_at),dayAnchor);
+  const inWeek=p=>{const d=new Date(p.scheduled_at);return d>=anchor&&d<addDays(anchor,7);};
+  const needsMe=p=>me.role==="approver"?p.status==="pending":p.status==="needs_changes";
+  const attnCount=posts.filter(needsMe).length;
+  const visiblePosts=list=>onlyMine?list.filter(needsMe):list;
+  const weekPosts=posts.filter(inWeek);
+  const counts=ORDER.reduce((o,s)=>{o[s]=weekPosts.filter(p=>p.status===s).length;return o;},{});
+  const today=new Date();
+
+  return (
+    <>
+      <div className="topbar">
+        <div className="brand">Cadence</div>
+        <div className="navtabs">
+          <button className={page==="schedule"?"on":""} onClick={()=>setPage("schedule")}>Schedule</button>
+          <button className={page==="insights"?"on":""} onClick={()=>setPage("insights")}>Insights</button>
+          {isCreator && <button className={page==="themes"?"on":""} onClick={()=>setPage("themes")}>Themes</button>}
+        </div>
+        <div className="summary">{ORDER.map(s=>(<div className="chip" key={s}><span className={"dot d-"+s}></span><b>{counts[s]}</b> {STATUS_LABEL[s].toLowerCase()}</div>))}</div>
+        <div className="spacer"></div>
+        <div className="whoami"><span className="rolebadge">{me.role}</span><span className="email">{me.email}</span><button className="linkbtn" onClick={onSignOut}>Sign out</button></div>
+      </div>
+
+      <div className="wrap">
+        {err && <div className="err" style={{marginBottom:16}}>{err} <button className="linkbtn" style={{color:"#8a0010",textDecoration:"underline"}} onClick={()=>{setErr("");load();}}>retry</button></div>}
+
+        {page==="insights" ? <AnalyticsPage posts={posts} themes={themes}/>
+        : page==="themes" ? <ThemesPage themes={themes} posts={posts} onAdd={addTheme} onRename={renameTheme} onDelete={deleteTheme}/>
+        : (<>
+          <div className="toolbar">
+            <h1>Schedule</h1>
+            <div className="viewtoggle"><button className={view==="week"?"on":""} onClick={()=>setView("week")}>Week</button><button className={view==="day"?"on":""} onClick={()=>setView("day")}>Day</button></div>
+            {view==="week"
+              ? <div className="navdate"><button className="arrow" onClick={()=>setAnchor(a=>addDays(a,-7))}>‹</button><span className="label">{MON[anchor.getMonth()].slice(0,3)} {anchor.getDate()} – {addDays(anchor,6).getDate()}</span><button className="arrow" onClick={()=>setAnchor(a=>addDays(a,7))}>›</button><button className="btn btn-soft btn-sm" onClick={()=>setAnchor(startOfWeek(new Date()))}>This week</button></div>
+              : <div className="navdate"><button className="arrow" onClick={()=>setDayAnchor(d=>addDays(d,-1))}>‹</button><span className="label">{DOW[dayAnchor.getDay()]}, {MON[dayAnchor.getMonth()].slice(0,3)} {dayAnchor.getDate()}</span><button className="arrow" onClick={()=>setDayAnchor(d=>addDays(d,1))}>›</button><button className="btn btn-soft btn-sm" onClick={()=>{const d=new Date();d.setHours(0,0,0,0);setDayAnchor(d);}}>Today</button></div>}
+            <div className="spacer"></div>
+            <button className={"filterchip"+(onlyMine?" on":"")} onClick={()=>setOnlyMine(v=>!v)}>Needs my attention <span className="count">{attnCount}</span></button>
+            {isCreator && <button className="btn btn-primary" onClick={()=>setEditing("new")}>＋ New post</button>}
+          </div>
+
+          {loading ? <div className="loading">Loading your schedule…</div>
+          : view==="week" ? (
+            <div className="weekgrid">
+              {weekDays.map((day,i)=>{
+                const dayPosts=visiblePosts(posts.filter(p=>sameDay(new Date(p.scheduled_at),day))).sort((x,y)=>new Date(x.scheduled_at)-new Date(y.scheduled_at));
+                const allDay=posts.filter(p=>sameDay(new Date(p.scheduled_at),day));
+                return (
+                  <div className={"daycol"+(sameDay(day,today)?" today":"")+(dayPosts.length?" has":"")} key={i}>
+                    <div className="dayhead"><div><div className="dow">{DOW[day.getDay()]}</div></div><div className="num">{day.getDate()}</div></div>
+                    {allDay.length>0 && <div className="daydots" style={{margin:"-8px 4px 10px"}}>{ORDER.filter(s=>allDay.some(p=>p.status===s)).map(s=><span key={s} className={"dot d-"+s}></span>)}</div>}
+                    {dayPosts.length===0 ? <div className="empty-day">{onlyMine?"—":"No posts"}</div>
+                      : dayPosts.map(p=><div key={p.id} style={{marginBottom:10}}><PostCard post={p} onOpen={()=>setOpenId(p.id)} compact/></div>)}
+                  </div>);
+              })}
+            </div>
+          ) : (
+            <div className="daylist">
+              {(()=>{const list=visiblePosts(posts.filter(inDay)).sort((x,y)=>new Date(x.scheduled_at)-new Date(y.scheduled_at));
+                if(list.length===0) return (<div className="empty-state"><div className="es-ico">🗓️</div><div className="es-t">Nothing scheduled here</div><div className="es-d">{isCreator?"Add a post with the New post button to start filling this day.":"When the creator schedules posts for this day, they'll appear here for review."}</div></div>);
+                return list.map(p=><PostCard key={p.id} post={p} onOpen={()=>setOpenId(p.id)}/>);
+              })()}
+            </div>
+          )}
+        </>)}
+      </div>
+
+      {open && <Detail post={open} comments={comments[open.id]||[]} me={me} onClose={()=>setOpenId(null)} onAction={doAction} onComment={(body)=>addComment(open.id,body)} onMeta={saveMeta}/>}
+      {editing && <Editor post={editing==="new"?null:editing} themes={themes} onAddTheme={addTheme} onClose={()=>setEditing(null)} onSave={savePost}/>}
+    </>
+  );
+}
+
+/* ===================== Supabase data layer ===================== */
+function api(cfg, token){
+  const base=cfg.url.replace(/\/+$/,"");
+  const h={apikey:cfg.anonKey,"Content-Type":"application/json"};
+  if(token) h.Authorization="Bearer "+token;
+  return {
+    async signUp(email,password,role){
+      const r=await fetch(base+"/auth/v1/signup",{method:"POST",headers:h,body:JSON.stringify({email,password,data:{role}})});
+      const d=await r.json();
+      if(!r.ok) throw new Error(d.msg||d.error_description||d.error||"Could not create account");
+      if(!d.access_token) throw new Error("Account made, but email confirmation is still on. Turn it off in Supabase → Authentication → Providers → Email, then sign in.");
+      return d;
+    },
+    async signIn(email,password){
+      const r=await fetch(base+"/auth/v1/token?grant_type=password",{method:"POST",headers:h,body:JSON.stringify({email,password})});
+      const d=await r.json();
+      if(!r.ok) throw new Error(d.msg||d.error_description||d.error||"Wrong email or password");
+      return d;
+    },
+    async select(table,query=""){const r=await fetch(base+"/rest/v1/"+table+"?"+query,{headers:h});if(!r.ok)throw new Error((await r.json()).message||"load failed");return r.json();},
+    async insert(table,row){const r=await fetch(base+"/rest/v1/"+table,{method:"POST",headers:{...h,Prefer:"return=representation"},body:JSON.stringify(row)});const d=await r.json();if(!r.ok)throw new Error(d.message||"save failed");return d[0];},
+    async update(table,id,patch){const r=await fetch(base+"/rest/v1/"+table+"?id=eq."+id,{method:"PATCH",headers:{...h,Prefer:"return=representation"},body:JSON.stringify(patch)});const d=await r.json();if(!r.ok)throw new Error(d.message||"update failed");return d[0];},
+    async remove(table,id){const r=await fetch(base+"/rest/v1/"+table+"?id=eq."+id,{method:"DELETE",headers:h});if(!r.ok)throw new Error("delete failed");},
+    async upsert(table,row){const r=await fetch(base+"/rest/v1/"+table,{method:"POST",headers:{...h,Prefer:"resolution=merge-duplicates,return=minimal"},body:JSON.stringify(row)});if(!r.ok){let d={};try{d=await r.json();}catch(e){}throw new Error(d.message||"upsert failed");}}
+  };
+}
+function makeDb(cfg,token){
+  const a=api(cfg,token);
+  return {
+    async listPosts(){return a.select("posts","select=*&order=scheduled_at.asc");},
+    async savePost(p){
+      if(p.id){const {id,created_at,...patch}=p;return a.update("posts",id,patch);}
+      return a.insert("posts",p);
+    },
+    async deletePost(id){return a.remove("posts",id);},
+    async listComments(){const cs=await a.select("comments","select=*&order=created_at.asc");const m={};cs.forEach(c=>{(m[c.post_id]=m[c.post_id]||[]).push(c);});return m;},
+    async addComment(c){return a.insert("comments",c);},
+    async getThemes(){try{const r=await a.select("app_settings","key=eq.themes&select=value");return (r[0]&&r[0].value)||[];}catch(e){return [];}},
+    async setThemes(arr){return a.upsert("app_settings",{key:"themes",value:arr});}
+  };
+}
+
+/* ===================== Connect screen ===================== */
+function Connect({onConnect}){
+  const [url,setUrl]=useState("");const [key,setKey]=useState("");const [err,setErr]=useState("");
+  function go(){
+    if(!url.trim()||!key.trim()){setErr("Both fields are needed to connect.");return;}
+    if(!/^https?:\/\//.test(url.trim())){setErr("The project URL should start with https://");return;}
+    onConnect({url:url.trim(),anonKey:key.trim()});
+  }
+  return (<div className="screen"><div className="panel">
+    <div className="eyebrow" style={{marginBottom:10}}>Cadence · Setup</div>
+    <div className="wordmark">Connect your workspace</div>
+    <div className="sub">Paste the two values from your Supabase project (Settings → API). For a deployed site, save them in the file's CONFIG block instead.</div>
+    {err && <div className="err">{err}</div>}
+    <div className="field"><label>Project URL</label><input value={url} onChange={e=>setUrl(e.target.value)} placeholder="https://yourproject.supabase.co"/></div>
+    <div className="field"><label>Anon public key</label><input value={key} onChange={e=>setKey(e.target.value)} placeholder="eyJhbGciOi…"/></div>
+    <button className="btn btn-primary" style={{width:"100%",justifyContent:"center"}} onClick={go}>Connect</button>
+  </div></div>);
+}
+
+/* ===================== Auth ===================== */
+function Auth({cfg,onAuthed,onBack}){
+  const [mode,setMode]=useState("signin");const [email,setEmail]=useState("");const [pw,setPw]=useState("");
+  const [role,setRole]=useState("creator");const [err,setErr]=useState("");const [busy,setBusy]=useState(false);
+  const a=api(cfg);
+  async function submit(){
+    setErr("");
+    if(!email.trim()||!pw){setErr("Enter your email and password.");return;}
+    if(mode==="signup"&&pw.length<6){setErr("Password needs at least 6 characters.");return;}
+    setBusy(true);
+    try{
+      const d=mode==="signin"?await a.signIn(email.trim(),pw):await a.signUp(email.trim(),pw,role);
+      const u=d.user||{};const r=(u.user_metadata&&u.user_metadata.role)||role;
+      onAuthed({token:d.access_token,email:u.email||email.trim(),role:r});
+    }catch(e){setErr(e.message);}finally{setBusy(false);}
+  }
+  return (<div className="screen"><div className="panel">
+    <div className="wordmark">Cadence</div>
+    <div className="sub">The posting schedule you and your leader share. Plan, review, approve, and see what's working.</div>
+    <div className="tabs">
+      <button className={mode==="signin"?"on":""} onClick={()=>{setMode("signin");setErr("")}}>Sign in</button>
+      <button className={mode==="signup"?"on":""} onClick={()=>{setMode("signup");setErr("")}}>Create account</button>
+    </div>
+    {err && <div className="err">{err}</div>}
+    {mode==="signup" && <>
+      <div className="field" style={{marginBottom:10}}><label>I am the…</label></div>
+      <div className="role-pick">
+        <button className={role==="creator"?"on":""} onClick={()=>setRole("creator")}><span className="rt">Creator</span><span className="rd">I schedule the posts</span></button>
+        <button className={role==="approver"?"on":""} onClick={()=>setRole("approver")}><span className="rt">Approver</span><span className="rd">I review & approve</span></button>
+      </div><div style={{height:18}}/>
+    </>}
+    <div className="field"><label>Email</label><input type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@work.com"/></div>
+    <div className="field"><label>Password</label><input type="password" value={pw} onChange={e=>setPw(e.target.value)} onKeyDown={e=>e.key==="Enter"&&submit()} placeholder="Your own password"/></div>
+    <button className="btn btn-primary" style={{width:"100%",justifyContent:"center"}} disabled={busy} onClick={submit}>{busy?"One moment…":(mode==="signin"?"Sign in":"Create account")}</button>
+    <button className="linkbtn" style={{display:"block",margin:"18px auto 0",color:"var(--gray)"}} onClick={onBack}>Change workspace</button>
+  </div></div>);
+}
+
+/* ===================== Root ===================== */
+function Root(){
+  const cfgInit=(window.CADENCE_CONFIG&&window.CADENCE_CONFIG.url&&window.CADENCE_CONFIG.anonKey)?window.CADENCE_CONFIG:null;
+  const [cfg,setCfg]=useState(cfgInit);
+  const [me,setMe]=useState(null);
+  if(!cfg) return <Connect onConnect={setCfg}/>;
+  if(!me)  return <Auth cfg={cfg} onAuthed={setMe} onBack={()=>{if(!cfgInit)setCfg(null);}}/>;
+  return <App db={makeDb(cfg,me.token)} me={me} onSignOut={()=>setMe(null)}/>;
+}
+ReactDOM.createRoot(document.getElementById("root")).render(<Root/>);
+
+</script>
+</body>
+</html>
